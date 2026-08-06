@@ -13,14 +13,14 @@ public class CompiledSection {
     boolean isCompletelyEmpty = false;
     final List<BlockEntity> blockEntities = Lists.newArrayList();
     @Nullable QuadSorter.SortState transparencyState;
+    @Nullable QuadSorter.SortState iceTransparencyState;
 
     public boolean hasTransparencyState() {
-        return this.transparencyState != null;
+        return this.transparencyState != null || this.iceTransparencyState != null;
     }
 
     public List<BlockEntity> getBlockEntities() {
         return this.blockEntities;
     }
 }
-
 

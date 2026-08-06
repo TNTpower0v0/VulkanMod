@@ -193,7 +193,7 @@ public class DrawBuffers {
         int initialSize = switch (renderType) {
             case SOLID -> 100000;
             case CUTOUT -> 250000;
-            case TRANSLUCENT, TRIPWIRE -> 60000;
+            case TRANSLUCENT, ICE, TRIPWIRE -> 60000;
         };
 
         return this.vertexBuffers.computeIfAbsent(
@@ -232,7 +232,7 @@ public class DrawBuffers {
     public void buildDrawBatchesIndirect(Vector3d cameraPos, IndirectBuffer indirectBuffer, StaticQueue<RenderSection> queue, TerrainRenderType terrainRenderType) {
         long bufferPtr = cmdBufferPtr;
 
-        boolean isTranslucent = terrainRenderType == TerrainRenderType.TRANSLUCENT;
+        boolean isTranslucent = terrainRenderType == TerrainRenderType.TRANSLUCENT || terrainRenderType == TerrainRenderType.ICE;
         boolean backFaceCulling = Initializer.CONFIG.backFaceCulling && !isTranslucent;
 
         int drawCount = 0;
@@ -370,7 +370,7 @@ public class DrawBuffers {
     }
 
     public void buildDrawBatchesDirect(Vector3d cameraPos, StaticQueue<RenderSection> queue, TerrainRenderType terrainRenderType) {
-        boolean isTranslucent = terrainRenderType == TerrainRenderType.TRANSLUCENT;
+        boolean isTranslucent = terrainRenderType == TerrainRenderType.TRANSLUCENT || terrainRenderType == TerrainRenderType.ICE;
         boolean backFaceCulling = Initializer.CONFIG.backFaceCulling && !isTranslucent;
 
         VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
@@ -506,7 +506,7 @@ public class DrawBuffers {
         ubo.setUseGlobalBuffer(false);
         ubo.getBufferSlice().set(sectionDataBuffer, 0, (int) sectionDataBuffer.getBufferSize());
 
-        if (terrainRenderType == TerrainRenderType.TRANSLUCENT && this.indexBuffer != null) {
+        if ((terrainRenderType == TerrainRenderType.TRANSLUCENT || terrainRenderType == TerrainRenderType.ICE) && this.indexBuffer != null) {
             vkCmdBindIndexBuffer(commandBuffer, this.indexBuffer.getId(), 0, VK_INDEX_TYPE_UINT16);
         }
     }

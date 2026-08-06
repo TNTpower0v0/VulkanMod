@@ -10,6 +10,7 @@ import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.IceBlock;
 import net.minecraft.world.level.levelgen.SingleThreadedRandomSource;
 import net.minecraft.world.phys.Vec3;
 import net.vulkanmod.Initializer;
@@ -56,6 +57,9 @@ public class BlockRenderer extends AbstractBlockRenderContext {
 
         TerrainRenderType renderType = TerrainRenderType.get(ItemBlockRenderTypes.getChunkRenderType(blockState));
         renderType = TerrainRenderType.getRemapped(renderType);
+        if (blockState.getBlock() instanceof IceBlock) {
+            renderType = TerrainRenderType.ICE;
+        }
         this.renderType = renderType;
         this.terrainBuilder = this.resources.builderPack.builder(renderType);
         this.terrainBuilder.setBlockAttributes(blockState);
@@ -97,6 +101,9 @@ public class BlockRenderer extends AbstractBlockRenderContext {
         } else {
             TerrainRenderType renderType = TerrainRenderType.get(layer);
             renderType = TerrainRenderType.getRemapped(renderType);
+            if (this.renderType == TerrainRenderType.ICE && renderType == TerrainRenderType.TRANSLUCENT) {
+                return this.terrainBuilder;
+            }
             TerrainBuilder bufferBuilder = this.resources.builderPack.builder(renderType);
             bufferBuilder.setBlockAttributes(this.blockState);
 
@@ -107,7 +114,7 @@ public class BlockRenderer extends AbstractBlockRenderContext {
     public void bufferQuad(TerrainBuilder terrainBuilder, Vector3f pos, ModelQuadView quad, QuadLightData quadLightData) {
         QuadFacing quadFacing = quad.getQuadFacing();
 
-        if (renderType == TerrainRenderType.TRANSLUCENT || !this.backFaceCulling) {
+        if (renderType == TerrainRenderType.TRANSLUCENT || renderType == TerrainRenderType.ICE || !this.backFaceCulling) {
             quadFacing = QuadFacing.UNDEFINED;
         }
 
@@ -144,4 +151,3 @@ public class BlockRenderer extends AbstractBlockRenderContext {
     }
 
 }
-

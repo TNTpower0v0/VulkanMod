@@ -36,7 +36,7 @@ public class UploadBuffer {
         }
 
         if (!drawState.sequentialIndex()) {
-            this.indexBuffer = BufferUtil.clone(terrainBuilder.getIndexBuffer());
+            this.indexBuffer = BufferUtil.clone(terrainBuilder.getIndexBuffer(drawState.indexType()));
         }
         else {
             this.indexBuffer = null;

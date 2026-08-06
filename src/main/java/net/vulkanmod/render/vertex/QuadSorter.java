@@ -2,12 +2,11 @@ package net.vulkanmod.render.vertex;
 
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.vulkanmod.render.util.SortUtil;
-import org.joml.Vector3f;
 import org.lwjgl.system.MemoryUtil;
 
 public class QuadSorter {
 
-    private Vector3f[] sortingPoints;
+    private QuadBounds[] sortingBounds;
     private float sortX = Float.NaN;
     private float sortY = Float.NaN;
     private float sortZ = Float.NaN;
@@ -17,9 +16,6 @@ public class QuadSorter {
     private int vertexCount;
     private int indexCount;
 
-    private float[] distances;
-    private int[] sortingPointsIndices;
-
     public void setQuadSortOrigin(float x, float y, float z) {
         this.sortX = x;
         this.sortY = y;
@@ -27,14 +23,12 @@ public class QuadSorter {
     }
 
     public SortState getSortState() {
-        return new SortState(this.vertexCount, this.sortingPoints, this.distances, this.sortingPointsIndices);
+        return new SortState(this.vertexCount, this.sortingBounds);
     }
 
     public void restoreSortState(QuadSorter.SortState sortState) {
         this.vertexCount = sortState.vertexCount;
-        this.sortingPoints = sortState.sortingPoints;
-        this.distances = sortState.distances;
-        this.sortingPointsIndices = sortState.sortingPointsIndices;
+        this.sortingBounds = sortState.sortingBounds;
 
         this.indexOnly = true;
     }
@@ -42,66 +36,53 @@ public class QuadSorter {
     public void setupQuadSortingPoints(long bufferPtr, int vertexCount, VertexFormat format) {
         this.vertexCount = vertexCount;
         int pointCount = vertexCount / 4;
-        Vector3f[] sortingPoints = new Vector3f[pointCount];
+        QuadBounds[] sortingBounds = new QuadBounds[pointCount];
 
         int vertexSize = format.getVertexSize();
         int quadStride = vertexSize * 4;
-        int offset = vertexSize * 2;
 
         if (format == CustomVertexFormat.COMPRESSED_TERRAIN) {
             final float invConv = 1.0f / VertexBuilder.CompressedVertexBuilder.POS_CONV_MUL;
-            final float convOffset = -VertexBuilder.CompressedVertexBuilder.POS_OFFSET;
-
             for (int m = 0; m < pointCount; ++m) {
                 long ptr = bufferPtr + (long) m * quadStride;
-
-                short x0 = MemoryUtil.memGetShort(ptr + 0);
-                short y0 = MemoryUtil.memGetShort(ptr + 2);
-                short z0 = MemoryUtil.memGetShort(ptr + 4);
-                short x2 = MemoryUtil.memGetShort(ptr + offset + 0);
-                short y2 = MemoryUtil.memGetShort(ptr + offset + 2);
-                short z2 = MemoryUtil.memGetShort(ptr + offset + 4);
-
-                float xa = (x0 + x2) * invConv * 0.5f + convOffset;
-                float ya = (y0 + y2) * invConv * 0.5f + convOffset;
-                float za = (z0 + z2) * invConv * 0.5f + convOffset;
-                sortingPoints[m] = new Vector3f(xa, ya, za);
+                sortingBounds[m] = readCompressedBounds(ptr, vertexSize, invConv);
             }
         } else {
             for (int m = 0; m < pointCount; ++m) {
                 long ptr = bufferPtr + (long) m * quadStride;
-
-                float x0 = MemoryUtil.memGetFloat(ptr + 0);
-                float y0 = MemoryUtil.memGetFloat(ptr + 4);
-                float z0 = MemoryUtil.memGetFloat(ptr + 8);
-                float x2 = MemoryUtil.memGetFloat(ptr + offset + 0);
-                float y2 = MemoryUtil.memGetFloat(ptr + offset + 4);
-                float z2 = MemoryUtil.memGetFloat(ptr + offset + 8);
-
-                float q = (x0 + x2) * 0.5f;
-                float r = (y0 + y2) * 0.5f;
-                float s = (z0 + z2) * 0.5f;
-                sortingPoints[m] = new Vector3f(q, r, s);
+                sortingBounds[m] = readBounds(ptr, vertexSize);
             }
         }
 
-        this.sortingPoints = sortingPoints;
-        this.distances = new float[pointCount];
-        this.sortingPointsIndices = new int[pointCount];
+        this.sortingBounds = sortingBounds;
+    }
+
+    private static QuadBounds readCompressedBounds(long ptr, int vertexSize, float invConv) {
+        final float convOffset = -VertexBuilder.CompressedVertexBuilder.POS_OFFSET;
+        QuadBounds bounds = new QuadBounds();
+
+        for (int vertex = 0; vertex < 4; vertex++, ptr += vertexSize) {
+            float x = MemoryUtil.memGetShort(ptr) * invConv + convOffset;
+            float y = MemoryUtil.memGetShort(ptr + 2) * invConv + convOffset;
+            float z = MemoryUtil.memGetShort(ptr + 4) * invConv + convOffset;
+            bounds.include(x, y, z);
+        }
+
+        return bounds;
+    }
+
+    private static QuadBounds readBounds(long ptr, int vertexSize) {
+        QuadBounds bounds = new QuadBounds();
+
+        for (int vertex = 0; vertex < 4; vertex++, ptr += vertexSize) {
+            bounds.include(MemoryUtil.memGetFloat(ptr), MemoryUtil.memGetFloat(ptr + 4), MemoryUtil.memGetFloat(ptr + 8));
+        }
+
+        return bounds;
     }
 
     public void putSortedQuadIndices(TerrainBufferBuilder bufferBuilder, VertexFormat.IndexType indexType) {
-        float[] distances = this.distances;
-        int[] sortingPointsIndices = this.sortingPointsIndices;
-
-        for (int i = 0; i < this.sortingPoints.length; sortingPointsIndices[i] = i++) {
-            float dx = this.sortingPoints[i].x() - this.sortX;
-            float dy = this.sortingPoints[i].y() - this.sortY;
-            float dz = this.sortingPoints[i].z() - this.sortZ;
-            distances[i] = dx * dx + dy * dy + dz * dz;
-        }
-
-        SortUtil.mergeSort(sortingPointsIndices, distances);
+        int[] sortingPointsIndices = this.sortQuads();
 
         long ptr = bufferBuilder.getPtr();
 
@@ -111,29 +92,14 @@ public class QuadSorter {
             final int quadIndex = sortingPointsIndices[i];
             final int baseVertex = quadIndex * stride;
 
-            MemoryUtil.memPutInt(ptr + (size * 0L), baseVertex + 0);
-            MemoryUtil.memPutInt(ptr + (size * 1L), baseVertex + 1);
-            MemoryUtil.memPutInt(ptr + (size * 2L), baseVertex + 2);
-            MemoryUtil.memPutInt(ptr + (size * 3L), baseVertex + 2);
-            MemoryUtil.memPutInt(ptr + (size * 4L), baseVertex + 3);
-            MemoryUtil.memPutInt(ptr + (size * 5L), baseVertex + 0);
+            putQuadIndices(ptr, indexType, baseVertex);
 
             ptr += size * 6L;
         }
     }
 
     public void putSortedQuadIndices(TerrainBuilder bufferBuilder, VertexFormat.IndexType indexType) {
-        float[] distances = new float[this.sortingPoints.length];
-        int[] sortingPoints = new int[this.sortingPoints.length];
-
-        for (int i = 0; i < this.sortingPoints.length; sortingPoints[i] = i++) {
-            float dx = this.sortingPoints[i].x() - this.sortX;
-            float dy = this.sortingPoints[i].y() - this.sortY;
-            float dz = this.sortingPoints[i].z() - this.sortZ;
-            distances[i] = dx * dx + dy * dy + dz * dz;
-        }
-
-        SortUtil.mergeSort(sortingPoints, distances);
+        int[] sortingPoints = this.sortQuads();
 
         long ptr = bufferBuilder.indexBufferPtr;
 
@@ -143,14 +109,39 @@ public class QuadSorter {
             final int quadIndex = sortingPoints[i];
             final int baseVertex = quadIndex * stride;
 
-            MemoryUtil.memPutInt(ptr + (size * 0L), baseVertex + 0);
-            MemoryUtil.memPutInt(ptr + (size * 1L), baseVertex + 1);
-            MemoryUtil.memPutInt(ptr + (size * 2L), baseVertex + 2);
-            MemoryUtil.memPutInt(ptr + (size * 3L), baseVertex + 2);
-            MemoryUtil.memPutInt(ptr + (size * 4L), baseVertex + 3);
-            MemoryUtil.memPutInt(ptr + (size * 5L), baseVertex + 0);
+            putQuadIndices(ptr, indexType, baseVertex);
 
             ptr += size * 6L;
+        }
+    }
+
+    private int[] sortQuads() {
+        int[] indices = new int[this.sortingBounds.length];
+        float[] distances = new float[this.sortingBounds.length];
+
+        for (int i = 0; i < this.sortingBounds.length; indices[i] = i++) {
+            distances[i] = this.sortingBounds[i].distanceToClosestPointSquared(this.sortX, this.sortY, this.sortZ);
+        }
+
+        SortUtil.mergeSort(indices, distances);
+        return indices;
+    }
+
+    private static void putQuadIndices(long ptr, VertexFormat.IndexType indexType, int baseVertex) {
+        if (indexType == VertexFormat.IndexType.SHORT) {
+            MemoryUtil.memPutShort(ptr, (short) baseVertex);
+            MemoryUtil.memPutShort(ptr + 2, (short) (baseVertex + 1));
+            MemoryUtil.memPutShort(ptr + 4, (short) (baseVertex + 2));
+            MemoryUtil.memPutShort(ptr + 6, (short) (baseVertex + 2));
+            MemoryUtil.memPutShort(ptr + 8, (short) (baseVertex + 3));
+            MemoryUtil.memPutShort(ptr + 10, (short) baseVertex);
+        } else {
+            MemoryUtil.memPutInt(ptr, baseVertex);
+            MemoryUtil.memPutInt(ptr + 4, baseVertex + 1);
+            MemoryUtil.memPutInt(ptr + 8, baseVertex + 2);
+            MemoryUtil.memPutInt(ptr + 12, baseVertex + 2);
+            MemoryUtil.memPutInt(ptr + 16, baseVertex + 3);
+            MemoryUtil.memPutInt(ptr + 20, baseVertex);
         }
     }
 
@@ -168,15 +159,36 @@ public class QuadSorter {
 
     public static class SortState {
         final int vertexCount;
-        final Vector3f[] sortingPoints;
-        final float[] distances;
-        final int[] sortingPointsIndices;
+        final QuadBounds[] sortingBounds;
 
-        SortState(int vertexCount, Vector3f[] sortingPoints, float[] distances, int[] sortingPointsIndices) {
+        SortState(int vertexCount, QuadBounds[] sortingBounds) {
             this.vertexCount = vertexCount;
-            this.sortingPoints = sortingPoints;
-            this.distances = distances;
-            this.sortingPointsIndices = sortingPointsIndices;
+            this.sortingBounds = sortingBounds;
+        }
+    }
+
+    private static class QuadBounds {
+        private float minX = Float.POSITIVE_INFINITY;
+        private float minY = Float.POSITIVE_INFINITY;
+        private float minZ = Float.POSITIVE_INFINITY;
+        private float maxX = Float.NEGATIVE_INFINITY;
+        private float maxY = Float.NEGATIVE_INFINITY;
+        private float maxZ = Float.NEGATIVE_INFINITY;
+
+        private void include(float x, float y, float z) {
+            this.minX = Math.min(this.minX, x);
+            this.minY = Math.min(this.minY, y);
+            this.minZ = Math.min(this.minZ, z);
+            this.maxX = Math.max(this.maxX, x);
+            this.maxY = Math.max(this.maxY, y);
+            this.maxZ = Math.max(this.maxZ, z);
+        }
+
+        private float distanceToClosestPointSquared(float x, float y, float z) {
+            float dx = Math.max(Math.max(this.minX - x, 0.0f), x - this.maxX);
+            float dy = Math.max(Math.max(this.minY - y, 0.0f), y - this.maxY);
+            float dz = Math.max(Math.max(this.minZ - z, 0.0f), z - this.maxZ);
+            return dx * dx + dy * dy + dz * dz;
         }
     }
 }

@@ -55,6 +55,7 @@ public class BuildTask extends ChunkTask {
         CompiledSection compiledSection = new CompiledSection();
         compiledSection.blockEntities.addAll(compileResult.blockEntities);
         compiledSection.transparencyState = compileResult.transparencyState;
+        compiledSection.iceTransparencyState = compileResult.iceTransparencyState;
         compiledSection.isCompletelyEmpty = compileResult.renderedLayers.isEmpty();
         compileResult.compiledSection = compiledSection;
 
@@ -136,6 +137,13 @@ public class BuildTask extends ChunkTask {
             compileResult.transparencyState = trasnlucentTerrainBuilder.getSortState();
         }
 
+        TerrainBuilder iceTerrainBuilder = bufferBuilders.builder(TerrainRenderType.ICE);
+        if (iceTerrainBuilder.getBufferBuilder(QuadFacing.UNDEFINED.ordinal()).getVertices() > 0) {
+            iceTerrainBuilder.setupQuadSortingPoints();
+            iceTerrainBuilder.setupQuadSorting(camX - (float) startBlockPos.getX(), camY - (float) startBlockPos.getY(), camZ - (float) startBlockPos.getZ());
+            compileResult.iceTransparencyState = iceTerrainBuilder.getSortState();
+        }
+
         for (TerrainRenderType renderType : TerrainRenderType.VALUES) {
             TerrainBuilder builder = bufferBuilders.builder(renderType);
 
@@ -169,12 +177,14 @@ public class BuildTask extends ChunkTask {
             renderType = switch (renderType) {
                 case SOLID, CUTOUT -> TerrainRenderType.CUTOUT;
                 case TRANSLUCENT, TRIPWIRE -> TerrainRenderType.TRANSLUCENT;
+                case ICE -> TerrainRenderType.ICE;
             };
         } else {
             renderType = switch (renderType) {
                 case SOLID -> TerrainRenderType.SOLID;
                 case CUTOUT -> TerrainRenderType.CUTOUT;
                 case TRANSLUCENT, TRIPWIRE -> TerrainRenderType.TRANSLUCENT;
+                case ICE -> TerrainRenderType.ICE;
             };
         }
 

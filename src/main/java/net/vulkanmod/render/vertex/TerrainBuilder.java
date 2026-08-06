@@ -113,7 +113,8 @@ public class TerrainBuilder {
 
         int indexCount = vertexCount / 4 * 6;
 
-        VertexFormat.IndexType indexType = VertexFormat.IndexType.least(indexCount);
+        // The largest value written to this buffer is a vertex index, not an index count.
+        VertexFormat.IndexType indexType = VertexFormat.IndexType.least(vertexCount);
         boolean sequentialIndexing;
 
         // TODO sorting
@@ -131,11 +132,10 @@ public class TerrainBuilder {
         return new DrawState(this.format.getVertexSize(), indexCount, indexType, this.indexOnly, sequentialIndexing);
     }
 
-    // TODO hardcoded index type size
-    public ByteBuffer getIndexBuffer() {
+    public ByteBuffer getIndexBuffer(VertexFormat.IndexType indexType) {
         int indexCount = this.quadSorter.getVertexCount() * 6 / 4;
 
-        return MemoryUtil.memByteBuffer(this.indexBufferPtr, indexCount * 2);
+        return MemoryUtil.memByteBuffer(this.indexBufferPtr, indexCount * indexType.bytes);
     }
 
     private void ensureDrawing() {

@@ -22,6 +22,7 @@ public class CompileResult {
 
     VisibilitySet visibilitySet;
     QuadSorter.SortState transparencyState;
+    QuadSorter.SortState iceTransparencyState;
     CompiledSection compiledSection;
 
     CompileResult(RenderSection renderSection, boolean fullUpdate) {

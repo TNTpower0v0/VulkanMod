@@ -34,23 +34,19 @@ public class SortTransparencyTask extends ChunkTask {
 
         CompiledSection compiledSection = this.section.getCompiledSection();
         QuadSorter.SortState transparencyState = compiledSection.transparencyState;
+        QuadSorter.SortState iceTransparencyState = compiledSection.iceTransparencyState;
 
-        if (transparencyState == null) {
+        if (transparencyState == null && iceTransparencyState == null) {
             return Result.CANCELLED;
         }
 
-        TerrainBuilder bufferBuilder = builderPack.builder(TerrainRenderType.TRANSLUCENT);
-        bufferBuilder.begin();
-        bufferBuilder.restoreSortState(transparencyState);
-
-        bufferBuilder.setupQuadSorting(x - (float) this.section.xOffset(), y - (float) this.section.yOffset(), z - (float) this.section.zOffset());
-        TerrainBuilder.DrawState drawState = bufferBuilder.endDrawing();
-
         CompileResult compileResult = new CompileResult(this.section, false);
-        UploadBuffer uploadBuffer = new UploadBuffer(bufferBuilder, drawState);
-        compileResult.renderedLayers.put(TerrainRenderType.TRANSLUCENT, uploadBuffer);
-
-        bufferBuilder.reset();
+        if (transparencyState != null) {
+            sortLayer(builderPack, compileResult, TerrainRenderType.TRANSLUCENT, transparencyState, x, y, z);
+        }
+        if (iceTransparencyState != null) {
+            sortLayer(builderPack, compileResult, TerrainRenderType.ICE, iceTransparencyState, x, y, z);
+        }
 
         if (this.cancelled.get()) {
             compileResult.renderedLayers.values().forEach(UploadBuffer::release);
@@ -59,5 +55,20 @@ public class SortTransparencyTask extends ChunkTask {
 
         taskDispatcher.scheduleSectionUpdate(compileResult);
         return Result.SUCCESSFUL;
+    }
+
+    private void sortLayer(ThreadBuilderPack builderPack, CompileResult compileResult, TerrainRenderType renderType,
+                           QuadSorter.SortState sortState, float x, float y, float z) {
+        TerrainBuilder bufferBuilder = builderPack.builder(renderType);
+        bufferBuilder.begin();
+        bufferBuilder.restoreSortState(sortState);
+
+        bufferBuilder.setupQuadSorting(x - (float) this.section.xOffset(), y - (float) this.section.yOffset(), z - (float) this.section.zOffset());
+        TerrainBuilder.DrawState drawState = bufferBuilder.endDrawing();
+
+        UploadBuffer uploadBuffer = new UploadBuffer(bufferBuilder, drawState);
+        compileResult.renderedLayers.put(renderType, uploadBuffer);
+
+        bufferBuilder.reset();
     }
 }

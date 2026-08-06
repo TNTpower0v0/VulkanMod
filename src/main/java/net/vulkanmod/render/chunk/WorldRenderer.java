@@ -386,26 +386,30 @@ public class WorldRenderer {
         int currentFrame = Renderer.getCurrentFrame();
         Set<TerrainRenderType> allowedRenderTypes = Initializer.CONFIG.uniqueOpaqueLayer ? TerrainRenderType.COMPACT_RENDER_TYPES : TerrainRenderType.SEMI_COMPACT_RENDER_TYPES;
         if (allowedRenderTypes.contains(renderType)) {
-            renderType.setCutoutUniform();
+            int passCount = isTranslucent ? 2 : 1;
+            for (int pass = 0; pass < passCount; pass++) {
+                TerrainRenderType drawType = pass == 0 ? renderType : TerrainRenderType.ICE;
+                drawType.setCutoutUniform();
 
-            for (Iterator<ChunkArea> iterator = this.sectionGraph.getChunkAreaQueue().iterator(isTranslucent); iterator.hasNext(); ) {
-                ChunkArea chunkArea = iterator.next();
-                var queue = chunkArea.sectionQueue;
-                DrawBuffers drawBuffers = chunkArea.drawBuffers;
+                for (Iterator<ChunkArea> iterator = this.sectionGraph.getChunkAreaQueue().iterator(isTranslucent); iterator.hasNext(); ) {
+                    ChunkArea chunkArea = iterator.next();
+                    var queue = chunkArea.sectionQueue;
+                    DrawBuffers drawBuffers = chunkArea.drawBuffers;
 
-                if (drawBuffers.getAreaBuffer(renderType) != null && queue.size() > 0) {
+                    if (drawBuffers.getAreaBuffer(drawType) != null && queue.size() > 0) {
 
-                    drawBuffers.bindBuffers(Renderer.getCommandBuffer(), pipeline, renderType,
-                                            camX, camY, camZ,
-                                            currentTimeMs, fadeTimeMs, fadeTimeInv);
+                        drawBuffers.bindBuffers(Renderer.getCommandBuffer(), pipeline, drawType,
+                                                camX, camY, camZ,
+                                                currentTimeMs, fadeTimeMs, fadeTimeInv);
 
-                    renderer.uploadAndBindUBOs(pipeline);
+                        renderer.uploadAndBindUBOs(pipeline);
 
-                    if (indirectDraw) {
-                        drawBuffers.buildDrawBatchesIndirect(cameraPos, indirectBuffers[currentFrame], queue, renderType);
-                    }
-                    else {
-                        drawBuffers.buildDrawBatchesDirect(cameraPos, queue, renderType);
+                        if (indirectDraw) {
+                            drawBuffers.buildDrawBatchesIndirect(cameraPos, indirectBuffers[currentFrame], queue, drawType);
+                        }
+                        else {
+                            drawBuffers.buildDrawBatchesDirect(cameraPos, queue, drawType);
+                        }
                     }
                 }
             }

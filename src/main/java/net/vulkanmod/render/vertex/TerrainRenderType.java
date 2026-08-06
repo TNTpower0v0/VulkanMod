@@ -13,6 +13,7 @@ public enum TerrainRenderType {
     SOLID(0.0f),
     CUTOUT(0.5f),
     TRANSLUCENT(0.01f),
+    ICE(0.01f),
     TRIPWIRE(0.1f);
 
     public static final TerrainRenderType[] VALUES = TerrainRenderType.values();
@@ -57,6 +58,7 @@ public enum TerrainRenderType {
             case "solid" -> TerrainRenderType.SOLID;
             case "cutout" -> TerrainRenderType.CUTOUT;
             case "translucent" -> TerrainRenderType.TRANSLUCENT;
+            case "ice" -> TerrainRenderType.ICE;
             case "tripwire" -> TerrainRenderType.TRIPWIRE;
             default -> null;
         };
@@ -67,6 +69,7 @@ public enum TerrainRenderType {
             case SOLID -> ChunkSectionLayer.SOLID;
             case CUTOUT -> ChunkSectionLayer.CUTOUT;
             case TRANSLUCENT -> ChunkSectionLayer.TRANSLUCENT;
+            case ICE -> ChunkSectionLayer.TRANSLUCENT;
             case TRIPWIRE -> ChunkSectionLayer.TRIPWIRE;
         };
     }
@@ -76,12 +79,14 @@ public enum TerrainRenderType {
             remapper = (renderType) -> switch (renderType) {
                 case SOLID, CUTOUT -> TerrainRenderType.CUTOUT;
                 case TRANSLUCENT, TRIPWIRE -> TerrainRenderType.TRANSLUCENT;
+                case ICE -> TerrainRenderType.ICE;
             };
         } else {
             remapper = (renderType) -> switch (renderType) {
                 case SOLID -> TerrainRenderType.SOLID;
                 case CUTOUT -> TerrainRenderType.CUTOUT;
                 case TRANSLUCENT, TRIPWIRE -> TerrainRenderType.TRANSLUCENT;
+                case ICE -> TerrainRenderType.ICE;
             };
         }
     }

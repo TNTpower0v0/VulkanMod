@@ -181,8 +181,8 @@ public class TaskDispatcher {
             compileResult.updateSection();
         }
         else {
-            UploadBuffer uploadBuffer = compileResult.renderedLayers.get(TerrainRenderType.TRANSLUCENT);
-            drawBuffers.upload(section, uploadBuffer, TerrainRenderType.TRANSLUCENT);
+            compileResult.renderedLayers.forEach((renderType, uploadBuffer) ->
+                    drawBuffers.upload(section, uploadBuffer, renderType));
         }
     }
 
